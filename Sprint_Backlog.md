@@ -1,6 +1,6 @@
 # Sprint Backlog - GymTracker 
 
-**Cilj 1. Sprinta:** Postavljanje projekta, Firebase integracija i osnovno korisničko sučelje za autentifikaciju (registracija i prijava).
+**Cilj 1. Sprinta:** Postavljanje projekta, integracija Firebase baze (Auth i Firestore) te izrada korisničkog sučelja za autentifikaciju i upravljanje treninzima.
 
 | Naziv Zadatka | Opis | Odgovorni član | Rok |
 | :--- | :--- | :--- | :--- |
@@ -11,3 +11,6 @@
 | **5. Logika autentifikacije** | Implementacija `createUserWithEmailAndPassword` i `signInWithEmailAndPassword` metoda na izgrađenim ekranima. | dogovoreni članovi | Petak |
 | **6. Upravljanje stanjem korisnika** | Dodavanje listenera (`onAuthStateChanged`) za provjeru je li korisnik prijavljen i usmjeravanje (routing) na početni ekran ili ekran za prijavu. | dogovoreni članovi | Petak |
 | **7. Osnovni početni ekran (UI)** | Izrada jednostavnog početnog ekrana (Dashboard) s opcijom "Odjava" (Sign out) kako bi se zaokružio cijeli *flow* prijave i odjave. | dogovoreni članovi | Petak |
+| **8. Refaktoriranje autentifikacije** | Uvođenje `AuthContext` komponente radi čišćeg koda i boljeg globalnog upravljanja prijavom. | dogovoreni članovi | Petak |
+| **9. Prikaz treninga (Firestore)** | Izrada `WorkoutCard` komponente i integracija s Firestore bazom za dohvaćanje i prikaz liste treninga na glavnom ekranu. | dogovoreni članovi | Petak |
+| **10. Unos novih treninga** | Implementacija `AddWorkoutModal` forme za dodavanje novih treninga i pohranu unosa direktno u Firestore. | dogovoreni članovi | Petak |
