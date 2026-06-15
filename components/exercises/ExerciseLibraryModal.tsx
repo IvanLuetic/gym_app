@@ -3,6 +3,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -112,35 +113,37 @@ export default function ExerciseLibraryModal({
           </View>
 
           {/* Category chips */}
-          <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={["Sve", ...CATEGORIES] as (Category | "Sve")[]}
-            keyExtractor={(item) => item}
-            contentContainerStyle={styles.chipsRow}
-            renderItem={({ item }) => {
-              const active = activeCategory === item;
-              const color =
-                item === "Sve"
-                  ? "#F97316"
-                  : CATEGORY_COLORS[item as Category];
-              return (
-                <Pressable
-                  onPress={() => setActiveCategory(item)}
-                  style={[
-                    styles.chip,
-                    active && { backgroundColor: color + "25", borderColor: color },
-                  ]}
-                >
-                  <Text
-                    style={[styles.chipText, active && { color }]}
+          <View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipsRow}
+            >
+              {(["Sve", ...CATEGORIES] as (Category | "Sve")[]).map((item) => {
+                const active = activeCategory === item;
+                const color =
+                  item === "Sve"
+                    ? "#F97316"
+                    : CATEGORY_COLORS[item as Category];
+                return (
+                  <Pressable
+                    key={item}
+                    onPress={() => setActiveCategory(item)}
+                    style={[
+                      styles.chip,
+                      active && { backgroundColor: color + "25", borderColor: color },
+                    ]}
                   >
-                    {item}
-                  </Text>
-                </Pressable>
-              );
-            }}
-          />
+                    <Text
+                      style={[styles.chipText, active && { color }]}
+                    >
+                      {item}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
 
           {/* Exercise list */}
           <FlatList

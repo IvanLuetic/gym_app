@@ -7,6 +7,7 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { firestore } from "@/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import WorkoutCard, { type Workout } from "@/components/workouts/WorkoutCard";
+import ExerciseLibraryModal from "@/components/exercises/ExerciseLibraryModal";
 
 export default function DashboardScreen() {
   const { user, logout } = useAuth();
@@ -15,6 +16,7 @@ export default function DashboardScreen() {
 
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const displayName = user?.email?.split("@")[0] ?? "Sportaš";
 
@@ -121,12 +123,15 @@ export default function DashboardScreen() {
         pathname: "/(tabs)/two",
         params: { openAddModal: "true" },
       });
+    } else if (label === "Vježbe") {
+      setLibraryOpen(true);
     } else {
       Alert.alert("Uskoro", `Funkcionalnost "${label}" stiže u sljedećoj verziji aplikacije! 🚀`);
     }
   };
 
   return (
+    <>
     <ScrollView
       style={styles.root}
       contentContainerStyle={[
@@ -228,6 +233,12 @@ export default function DashboardScreen() {
         </View>
       )}
     </ScrollView>
+    <ExerciseLibraryModal
+      visible={libraryOpen}
+      onClose={() => setLibraryOpen(false)}
+      onSelect={() => {}}
+    />
+    </>
   );
 }
 
