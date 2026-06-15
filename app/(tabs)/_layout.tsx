@@ -50,6 +50,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="steps"
+        options={{
+          title: "Koraci",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="footsteps-outline" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
