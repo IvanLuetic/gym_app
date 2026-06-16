@@ -1,6 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
@@ -8,9 +8,7 @@ export default function TabLayout() {
 
   // Android navigation bar bottom spacing support
   const bottomInset = insets.bottom > 0 ? insets.bottom : 10;
-  const tabBarHeight = Platform.OS === "ios" 
-    ? 88 
-    : (56 + bottomInset);
+  const tabBarHeight = Platform.OS === "ios" ? 88 : 56 + bottomInset;
 
   return (
     <Tabs
@@ -56,6 +54,15 @@ export default function TabLayout() {
           title: "Koraci",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="footsteps-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: "Raspored",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar-outline" size={size} color={color} />
           ),
         }}
       />
