@@ -30,8 +30,7 @@
 | **5. Aktivna Trening Sesija** | Spremanje i ažuriranje podataka serija u realnom vremenu u bazi. | Kristijan | Završeno |
 | **6. Napredna Statistika** | Pregled i analitika podataka dohvaćenih iz baze. | Ivan Luetić | Završeno |
 | **7. Kalendar treninga** | Dohvaćanje i kalendarski pregled odrađenih treninga iz baze. | Ivan Luetić | Završeno |
-| **8. Dijeljenje treninga (QR kod)** | Prijenos splitova između korisnika putem skeniranja QR koda. | Kristijan | Završeno |
-| **9. Korisnički profil i postavke** | Unos korisničkih podataka i izračun makronutrijenata, uz lokalno spremanje. | Kristijan | Završeno |
+| **8. Korisnički profil i postavke** | Unos korisničkih podataka i izračun makronutrijenata, uz lokalno spremanje. | Kristijan | Završeno |
 
 ---
 
@@ -55,4 +54,5 @@
 | **1. Integracija senzora** | Postavljanje i konfiguracija paketa za pedometar i praćenje koraka. | Ivan Luetić | Završeno |
 | **2. Ekran za praćenje koraka** | Prikaz značajki temeljenih na senzoru (trenutni koraci i kalorije). | Ivan Luetić | Završeno |
 | **3. Vizualizacija podataka senzora** | Prikaz povijesti podataka sa senzora (zadnjih 7 dana) na grafikonu. | Ivan Luetić | Završeno |
-| **4. QA Testiranje** | Detaljno testiranje senzora, uploadanja i komunikacije s bazom na uređajima. | Frano Vranjković | U tijeku |
+| **4. Dijeljenje treninga (QR kod)** | Prijenos splitova između korisnika putem generiranja i skeniranja QR koda. | Kristijan | Završeno |
+| **5. QA Testiranje** | Detaljno testiranje senzora, uploadanja i komunikacije s bazom na uređajima. | Frano Vranjković | U tijeku |
