@@ -17,9 +17,10 @@ type SplitCardProps = {
   onPress: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onShare?: () => void;
 };
 
-export default function SplitCard({ split, onPress, onEdit, onDelete }: SplitCardProps) {
+export default function SplitCard({ split, onPress, onEdit, onDelete, onShare }: SplitCardProps) {
   return (
     <Pressable
       style={({ pressed }) => [styles.card, { borderColor: split.color + "40" }, pressed && styles.pressed]}
@@ -35,6 +36,11 @@ export default function SplitCard({ split, onPress, onEdit, onDelete }: SplitCar
             <Ionicons name="barbell-outline" size={20} color={split.color} />
           </View>
           <View style={styles.actions}>
+            {onShare && (
+              <Pressable onPress={onShare} style={styles.actionBtn} hitSlop={8}>
+                <Ionicons name="share-social-outline" size={16} color="#38BDF8" />
+              </Pressable>
+            )}
             <Pressable onPress={onEdit} style={styles.actionBtn} hitSlop={8}>
               <Ionicons name="pencil-outline" size={16} color="#64748B" />
             </Pressable>
