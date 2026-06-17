@@ -23,6 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import SplitCard, { type Split } from "@/components/workouts/SplitCard";
 import CreateSplitModal from "@/components/workouts/CreateSplitModal";
 import WorkoutHistoryCard from "@/components/workouts/WorkoutHistoryCard";
+import ShareSplitModal from "@/components/workouts/ShareSplitModal";
 import type { AnyExercise } from "@/constants/exercises";
 
 type Tab = "splits" | "history";
@@ -39,7 +40,9 @@ export default function WorkoutsScreen() {
   const [loadingSplits, setLoadingSplits] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [splitModalOpen, setSplitModalOpen] = useState(false);
+  const [shareSplitModalOpen, setShareSplitModalOpen] = useState(false);
   const [editSplit, setEditSplit] = useState<Split | null>(null);
+  const [shareSplit, setShareSplit] = useState<Split | null>(null);
 
   // Open split creation from dashboard quick action
   useEffect(() => {
@@ -120,6 +123,15 @@ export default function WorkoutsScreen() {
     setSplitModalOpen(true);
   };
 
+  const openShareSplit = (split: Split) => {
+    setShareSplit(split);
+    setShareSplitModalOpen(true);
+  };
+
+  const handleScanQR = () => {
+    router.push("/workout/scan-qr");
+  };
+
   return (
     <View style={styles.root}>
       {/* ── Header ────────────────────────────────────────────────── */}
@@ -133,6 +145,9 @@ export default function WorkoutsScreen() {
           </Text>
         </View>
         <View style={styles.headerRight}>
+          <Pressable style={styles.emptySessionBtn} onPress={handleScanQR}>
+            <Ionicons name="qr-code-outline" size={18} color="#38BDF8" />
+          </Pressable>
           <Pressable style={styles.emptySessionBtn} onPress={handleStartEmpty}>
             <Ionicons name="play-outline" size={18} color="#F97316" />
           </Pressable>
@@ -208,6 +223,7 @@ export default function WorkoutsScreen() {
                 onPress={() => handleStartSplit(item)}
                 onEdit={() => openEditSplit(item)}
                 onDelete={() => openEditSplit(item)}
+                onShare={() => openShareSplit(item)}
               />
             )}
             contentContainerStyle={[
@@ -265,6 +281,12 @@ export default function WorkoutsScreen() {
         visible={splitModalOpen}
         onClose={() => { setSplitModalOpen(false); setEditSplit(null); }}
         editSplit={editSplit}
+      />
+      
+      <ShareSplitModal
+        visible={shareSplitModalOpen}
+        onClose={() => { setShareSplitModalOpen(false); setShareSplit(null); }}
+        split={shareSplit}
       />
     </View>
   );
