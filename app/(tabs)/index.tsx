@@ -1,5 +1,5 @@
 import ExerciseLibraryModal from "@/components/exercises/ExerciseLibraryModal";
-import WorkoutCard, { type Workout } from "@/components/workouts/WorkoutCard";
+import WorkoutHistoryCard from "@/components/workouts/WorkoutHistoryCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { firestore } from "@/firebase";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,7 +21,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
 
@@ -31,24 +31,24 @@ export default function DashboardScreen() {
     if (!user) return;
 
     const q = query(
-      collection(firestore, "workouts"),
+      collection(firestore, "workoutSessions"),
       where("userId", "==", user.uid),
     );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const list: Workout[] = [];
+        const list: any[] = [];
         snapshot.forEach((doc) => {
-          list.push({ id: doc.id, ...doc.data() } as Workout);
+          list.push({ id: doc.id, ...doc.data() });
         });
         // Sort client-side by date
         list.sort((a, b) => {
-          const dateA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0;
-          const dateB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
+          const dateA = a.finishedAt?.seconds ?? a.startedAt?.seconds ?? 0;
+          const dateB = b.finishedAt?.seconds ?? b.startedAt?.seconds ?? 0;
           return dateB - dateA;
         });
-        setWorkouts(list);
+        setSessions(list);
         setLoading(false);
       },
       (error) => {
@@ -65,31 +65,27 @@ export default function DashboardScreen() {
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     // 1. Weekly workouts count
-    const weeklyCount = workouts.filter((w) => {
-      if (!w.createdAt) return false;
-      const date = w.createdAt.toDate
-        ? w.createdAt.toDate().getTime()
-        : new Date(w.createdAt).getTime();
-      return date >= oneWeekAgo;
+    const weeklyCount = sessions.filter((s) => {
+      const ts = s.finishedAt?.seconds ?? s.startedAt?.seconds;
+      if (!ts) return false;
+      return ts * 1000 >= oneWeekAgo;
     }).length;
 
     // 2. Total duration in hours
-    const totalMinutes = workouts.reduce(
-      (sum, w) => sum + (w.duration || 0),
+    const totalSeconds = sessions.reduce(
+      (sum, s) => sum + (s.durationSec || 0),
       0,
     );
-    const totalHours = (totalMinutes / 60).toFixed(1);
+    const totalHours = (totalSeconds / 3600).toFixed(1);
 
     // 3. Streak calculation (consecutive days)
     const workoutDates = Array.from(
       new Set(
-        workouts
-          .map((w) => {
-            if (!w.createdAt) return null;
-            const date = w.createdAt.toDate
-              ? w.createdAt.toDate()
-              : new Date(w.createdAt);
-            return date.toDateString(); // "Fri Jun 05 2026"
+        sessions
+          .map((s) => {
+            const dateObj = s.finishedAt?.toDate?.() ?? s.startedAt?.toDate?.();
+            if (!dateObj) return null;
+            return dateObj.toDateString(); // "Fri Jun 05 2026"
           })
           .filter(Boolean),
       ),
@@ -263,7 +259,7 @@ export default function DashboardScreen() {
             color="#F97316"
             style={{ marginVertical: 20 }}
           />
-        ) : workouts.length === 0 ? (
+        ) : sessions.length === 0 ? (
           <View style={styles.emptyCard}>
             <Ionicons name="calendar-outline" size={36} color="#334155" />
             <Text style={styles.emptyText}>Nema odrađenih treninga</Text>
@@ -273,8 +269,8 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View>
-            {workouts.slice(0, 3).map((workout) => (
-              <WorkoutCard key={workout.id} workout={workout} />
+            {sessions.slice(0, 3).map((session) => (
+              <WorkoutHistoryCard key={session.id} session={session} />
             ))}
           </View>
         )}
