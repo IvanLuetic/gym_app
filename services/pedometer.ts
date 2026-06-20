@@ -107,7 +107,7 @@ export function usePedometer() {
         return;
       }
 
-      // Only CHECK existing permissions on init — never request here
+      // Check existing permissions on init
       const granted = await HC.getGrantedPermissions();
       const hasSteps = (granted as any[]).some(
         (p: any) => p.recordType === "Steps" && p.accessType === "read",

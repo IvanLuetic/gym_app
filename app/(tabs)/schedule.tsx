@@ -45,7 +45,6 @@ const DAY_NAMES = [
 
 const DAY_SHORT = ["Ned", "Pon", "Uto", "Sri", "Čet", "Pet", "Sub"];
 
-// Order to display the week starting Monday
 const DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 interface ScheduleItem {

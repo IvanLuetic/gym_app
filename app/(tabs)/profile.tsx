@@ -1,16 +1,31 @@
-import { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Pressable, Image, Modal, TextInput, ScrollView, Alert, Switch } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/contexts/AuthContext";
-import * as ImagePicker from "expo-image-picker";
+import { supabase } from "@/supabase";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { decode } from "base64-arraybuffer";
+import { File } from "expo-file-system";
+import * as ImagePicker from "expo-image-picker";
+import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  
+  const [uploading, setUploading] = useState(false);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [userData, setUserData] = useState({
     age: "",
@@ -20,10 +35,12 @@ export default function ProfileScreen() {
     goal: "Maintain",
     activity: "Moderate",
   });
-  const [macros, setMacros] = useState<{ calories: number; protein: number } | null>(null);
+  const [macros, setMacros] = useState<{
+    calories: number;
+    protein: number;
+  } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Settings za obavijesti
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [notifSettings, setNotifSettings] = useState({
     reminders: true,
@@ -33,22 +50,32 @@ export default function ProfileScreen() {
   const displayName = user?.email?.split("@")[0] ?? "Sportaš";
 
   useEffect(() => {
-    // Učitavanje lokalno spremljene slike
     const loadAvatar = async () => {
       try {
-        const storedUri = await AsyncStorage.getItem(`avatar_${user?.uid}`);
+        if (!user?.uid) return;
+
+        // Try local cache first for speed
+        const storedUri = await AsyncStorage.getItem(`avatar_${user.uid}`);
         if (storedUri) {
           setAvatarUri(storedUri);
+        } else {
+          const { data } = supabase.storage
+            .from("profile-pictures")
+            .getPublicUrl(`${user.uid}/avatar.jpg`);
+          if (data?.publicUrl) {
+            setAvatarUri(data.publicUrl);
+            await AsyncStorage.setItem(`avatar_${user.uid}`, data.publicUrl);
+          }
         }
-        
-        const storedData = await AsyncStorage.getItem(`userData_${user?.uid}`);
+
+        const storedData = await AsyncStorage.getItem(`userData_${user.uid}`);
         if (storedData) {
           const parsed = JSON.parse(storedData);
           setUserData(parsed);
           setMacros(calculateMacros(parsed));
         }
 
-        const storedNotifs = await AsyncStorage.getItem(`notifs_${user?.uid}`);
+        const storedNotifs = await AsyncStorage.getItem(`notifs_${user.uid}`);
         if (storedNotifs) {
           setNotifSettings(JSON.parse(storedNotifs));
         }
@@ -74,12 +101,12 @@ export default function ProfileScreen() {
     if (data.activity === "Low") tdee *= 1.2;
     else if (data.activity === "Moderate") tdee *= 1.55;
     else if (data.activity === "High") tdee *= 1.725;
-    else tdee *= 1.55; // Default osiguranje
+    else tdee *= 1.55; // Default
 
     if (data.goal === "Lose") tdee -= 500;
     if (data.goal === "Build") tdee += 300;
 
-    const protein = Math.round(w * 2.2); // cca 2.2g po kg
+    const protein = Math.round(w * 2.2);
     const calories = Math.round(tdee);
 
     return { calories, protein };
@@ -87,15 +114,20 @@ export default function ProfileScreen() {
 
   const saveUserData = async () => {
     if (!userData.age || !userData.height || !userData.weight) {
-      Alert.alert("Greška", "Molimo unesite sve podatke (dob, visinu, težinu).");
+      Alert.alert(
+        "Greška",
+        "Molimo unesite sve podatke (dob, visinu, težinu).",
+      );
       return;
     }
     try {
       if (user?.uid) {
-        await AsyncStorage.setItem(`userData_${user.uid}`, JSON.stringify(userData));
+        await AsyncStorage.setItem(
+          `userData_${user.uid}`,
+          JSON.stringify(userData),
+        );
         setMacros(calculateMacros(userData));
-        
-        // Skrolaj do rezultata
+
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -110,7 +142,10 @@ export default function ProfileScreen() {
     const newSettings = { ...notifSettings, [key]: newVal };
     setNotifSettings(newSettings);
     if (user?.uid) {
-      await AsyncStorage.setItem(`notifs_${user.uid}`, JSON.stringify(newSettings));
+      await AsyncStorage.setItem(
+        `notifs_${user.uid}`,
+        JSON.stringify(newSettings),
+      );
     }
   };
 
@@ -125,27 +160,69 @@ export default function ProfileScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
+        const fileExt = uri.split(".").pop() ?? "jpg";
+
+        if (!user?.uid) return;
+
         setAvatarUri(uri);
-        
-        // Lokalno spremanje za sada
-        if (user?.uid) {
-          await AsyncStorage.setItem(`avatar_${user.uid}`, uri);
+        setUploading(true);
+
+        const file = new File(uri);
+        const base64 = await file.base64();
+
+        const filePath = `${user.uid}/avatar.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("profile-pictures")
+          .upload(filePath, decode(base64), {
+            contentType: `image/${fileExt}`,
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+          Alert.alert("Greška", "Slika nije uspješno spremljena.");
+          setUploading(false);
+          return;
         }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("profile-pictures")
+          .getPublicUrl(filePath);
+
+        const publicUrl = publicUrlData.publicUrl;
+
+        const newPicture = `${publicUrl}?t=${Date.now()}`;
+
+        await AsyncStorage.setItem(`avatar_${user.uid}`, newPicture);
+        setAvatarUri(newPicture);
+        setUploading(false);
       }
     } catch (error) {
-      console.error("Error picking image:", error);
+      console.error("Error picking/uploading image:", error);
+      Alert.alert("Greška", "Nešto je pošlo po krivu prilikom slanja slike.");
+      setUploading(false);
     }
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top > 0 ? insets.top + 20 : 40 }]}>
+    <View
+      style={[
+        styles.root,
+        { paddingTop: insets.top > 0 ? insets.top + 20 : 40 },
+      ]}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Moj Profil</Text>
       </View>
 
       <View style={styles.content}>
         <View style={styles.avatarContainer}>
-          <Pressable onPress={pickImage} style={styles.avatarWrapper}>
+          <Pressable
+            onPress={pickImage}
+            style={styles.avatarWrapper}
+            disabled={uploading}
+          >
             {avatarUri ? (
               <Image source={{ uri: avatarUri }} style={styles.avatar} />
             ) : (
@@ -154,7 +231,11 @@ export default function ProfileScreen() {
               </View>
             )}
             <View style={styles.editBadge}>
-              <Ionicons name="camera-outline" size={14} color="#FFF" />
+              {uploading ? (
+                <Ionicons name="hourglass-outline" size={14} color="#FFF" />
+              ) : (
+                <Ionicons name="camera-outline" size={14} color="#FFF" />
+              )}
             </View>
           </Pressable>
           <Text style={styles.displayName}>{displayName}</Text>
@@ -163,17 +244,29 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Postavke</Text>
-          
-          <Pressable style={styles.settingRow} onPress={() => setNotifModalVisible(true)}>
+
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => setNotifModalVisible(true)}
+          >
             <View style={styles.settingIcon}>
-              <Ionicons name="notifications-outline" size={20} color="#F8FAFC" />
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color="#F8FAFC"
+              />
             </View>
             <Text style={styles.settingText}>Obavijesti</Text>
             <Ionicons name="chevron-forward" size={20} color="#64748B" />
           </Pressable>
-          
-          <Pressable style={styles.settingRow} onPress={() => setModalVisible(true)}>
-            <View style={[styles.settingIcon, { backgroundColor: "#8B5CF620" }]}>
+
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => setModalVisible(true)}
+          >
+            <View
+              style={[styles.settingIcon, { backgroundColor: "#8B5CF620" }]}
+            >
               <Ionicons name="body-outline" size={20} color="#8B5CF6" />
             </View>
             <Text style={styles.settingText}>Podaci korisnika i analiza</Text>
@@ -181,10 +274,14 @@ export default function ProfileScreen() {
           </Pressable>
 
           <Pressable style={styles.settingRow} onPress={logout}>
-            <View style={[styles.settingIcon, { backgroundColor: "#EF444420" }]}>
+            <View
+              style={[styles.settingIcon, { backgroundColor: "#EF444420" }]}
+            >
               <Ionicons name="log-out-outline" size={20} color="#EF4444" />
             </View>
-            <Text style={[styles.settingText, { color: "#EF4444" }]}>Odjava</Text>
+            <Text style={[styles.settingText, { color: "#EF4444" }]}>
+              Odjava
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -193,7 +290,10 @@ export default function ProfileScreen() {
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              ref={scrollViewRef}
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Tvoji Podaci</Text>
                 <Pressable onPress={() => setModalVisible(false)}>
@@ -216,7 +316,9 @@ export default function ProfileScreen() {
                 style={styles.input}
                 keyboardType="numeric"
                 value={userData.height}
-                onChangeText={(text) => setUserData({ ...userData, height: text })}
+                onChangeText={(text) =>
+                  setUserData({ ...userData, height: text })
+                }
                 placeholder="Npr. 180"
                 placeholderTextColor="#64748B"
               />
@@ -226,7 +328,9 @@ export default function ProfileScreen() {
                 style={styles.input}
                 keyboardType="numeric"
                 value={userData.weight}
-                onChangeText={(text) => setUserData({ ...userData, weight: text })}
+                onChangeText={(text) =>
+                  setUserData({ ...userData, weight: text })
+                }
                 placeholder="Npr. 80"
                 placeholderTextColor="#64748B"
               />
@@ -234,60 +338,143 @@ export default function ProfileScreen() {
               <Text style={styles.label}>Spol</Text>
               <View style={styles.rowChoices}>
                 <Pressable
-                  style={[styles.choiceBtn, userData.gender === "Male" && styles.choiceActive]}
+                  style={[
+                    styles.choiceBtn,
+                    userData.gender === "Male" && styles.choiceActive,
+                  ]}
                   onPress={() => setUserData({ ...userData, gender: "Male" })}
                 >
-                  <Text style={[styles.choiceText, userData.gender === "Male" && styles.choiceTextActive]}>Muško</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.gender === "Male" && styles.choiceTextActive,
+                    ]}
+                  >
+                    Muško
+                  </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.choiceBtn, userData.gender === "Female" && styles.choiceActive]}
+                  style={[
+                    styles.choiceBtn,
+                    userData.gender === "Female" && styles.choiceActive,
+                  ]}
                   onPress={() => setUserData({ ...userData, gender: "Female" })}
                 >
-                  <Text style={[styles.choiceText, userData.gender === "Female" && styles.choiceTextActive]}>Žensko</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.gender === "Female" && styles.choiceTextActive,
+                    ]}
+                  >
+                    Žensko
+                  </Text>
                 </Pressable>
               </View>
 
               <Text style={styles.label}>Fizička aktivnost</Text>
               <View style={styles.rowChoices}>
                 <Pressable
-                  style={[styles.choiceBtn, userData.activity === "Low" && styles.choiceActive]}
+                  style={[
+                    styles.choiceBtn,
+                    userData.activity === "Low" && styles.choiceActive,
+                  ]}
                   onPress={() => setUserData({ ...userData, activity: "Low" })}
                 >
-                  <Text style={[styles.choiceText, userData.activity === "Low" && styles.choiceTextActive]}>Slabo</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.activity === "Low" && styles.choiceTextActive,
+                    ]}
+                  >
+                    Slabo
+                  </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.choiceBtn, userData.activity === "Moderate" && styles.choiceActive]}
-                  onPress={() => setUserData({ ...userData, activity: "Moderate" })}
+                  style={[
+                    styles.choiceBtn,
+                    userData.activity === "Moderate" && styles.choiceActive,
+                  ]}
+                  onPress={() =>
+                    setUserData({ ...userData, activity: "Moderate" })
+                  }
                 >
-                  <Text style={[styles.choiceText, userData.activity === "Moderate" && styles.choiceTextActive]}>Umjereno</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.activity === "Moderate" &&
+                        styles.choiceTextActive,
+                    ]}
+                  >
+                    Umjereno
+                  </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.choiceBtn, userData.activity === "High" && styles.choiceActive]}
+                  style={[
+                    styles.choiceBtn,
+                    userData.activity === "High" && styles.choiceActive,
+                  ]}
                   onPress={() => setUserData({ ...userData, activity: "High" })}
                 >
-                  <Text style={[styles.choiceText, userData.activity === "High" && styles.choiceTextActive]}>Jako</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.activity === "High" && styles.choiceTextActive,
+                    ]}
+                  >
+                    Jako
+                  </Text>
                 </Pressable>
               </View>
 
               <Text style={styles.label}>Cilj</Text>
               <View style={styles.rowChoices}>
                 <Pressable
-                  style={[styles.choiceBtn, userData.goal === "Lose" && styles.choiceActive]}
+                  style={[
+                    styles.choiceBtn,
+                    userData.goal === "Lose" && styles.choiceActive,
+                  ]}
                   onPress={() => setUserData({ ...userData, goal: "Lose" })}
                 >
-                  <Text style={[styles.choiceText, userData.goal === "Lose" && styles.choiceTextActive]}>Mršavljenje</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.goal === "Lose" && styles.choiceTextActive,
+                    ]}
+                  >
+                    Mršavljenje
+                  </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.choiceBtn, userData.goal === "Maintain" && styles.choiceActive]}
+                  style={[
+                    styles.choiceBtn,
+                    userData.goal === "Maintain" && styles.choiceActive,
+                  ]}
                   onPress={() => setUserData({ ...userData, goal: "Maintain" })}
                 >
-                  <Text style={[styles.choiceText, userData.goal === "Maintain" && styles.choiceTextActive]}>Održavanje</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.goal === "Maintain" && styles.choiceTextActive,
+                    ]}
+                  >
+                    Održavanje
+                  </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.choiceBtn, userData.goal === "Build" && styles.choiceActive]}
+                  style={[
+                    styles.choiceBtn,
+                    userData.goal === "Build" && styles.choiceActive,
+                  ]}
                   onPress={() => setUserData({ ...userData, goal: "Build" })}
                 >
-                  <Text style={[styles.choiceText, userData.goal === "Build" && styles.choiceTextActive]}>Mišićna masa</Text>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      userData.goal === "Build" && styles.choiceTextActive,
+                    ]}
+                  >
+                    Mišićna masa
+                  </Text>
                 </Pressable>
               </View>
 
@@ -297,14 +484,24 @@ export default function ProfileScreen() {
 
               {macros && (
                 <View style={styles.macrosBox}>
-                  <Text style={styles.macrosTitle}>Tvoj dnevni cilj (procjena)</Text>
+                  <Text style={styles.macrosTitle}>
+                    Tvoj dnevni cilj (procjena)
+                  </Text>
                   <View style={styles.macroRow}>
                     <Ionicons name="flame-outline" size={24} color="#F97316" />
-                    <Text style={styles.macroValue}>{macros.calories} kcal</Text>
+                    <Text style={styles.macroValue}>
+                      {macros.calories} kcal
+                    </Text>
                   </View>
                   <View style={styles.macroRow}>
-                    <Ionicons name="nutrition-outline" size={24} color="#38BDF8" />
-                    <Text style={styles.macroValue}>{macros.protein}g proteina</Text>
+                    <Ionicons
+                      name="nutrition-outline"
+                      size={24}
+                      color="#38BDF8"
+                    />
+                    <Text style={styles.macroValue}>
+                      {macros.protein}g proteina
+                    </Text>
                   </View>
                   <Text style={styles.macrosNote}>
                     *Izračunato Mifflin-St Jeor formulom za odabranu aktivnost.
@@ -329,7 +526,9 @@ export default function ProfileScreen() {
             <View style={styles.toggleRow}>
               <View>
                 <Text style={styles.toggleTitle}>Podsjetnik na trening</Text>
-                <Text style={styles.toggleSub}>Upozorenja kada je vrijeme za tvoj zakazani trening.</Text>
+                <Text style={styles.toggleSub}>
+                  Upozorenja kada je vrijeme za tvoj zakazani trening.
+                </Text>
               </View>
               <Switch
                 value={notifSettings.reminders}
@@ -342,7 +541,9 @@ export default function ProfileScreen() {
             <View style={styles.toggleRow}>
               <View>
                 <Text style={styles.toggleTitle}>Motivacijske poruke</Text>
-                <Text style={styles.toggleSub}>Dnevni podsjetnici da te održe na pravom putu.</Text>
+                <Text style={styles.toggleSub}>
+                  Dnevni podsjetnici da te održe na pravom putu.
+                </Text>
               </View>
               <Switch
                 value={notifSettings.motivation}
@@ -353,9 +554,14 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.notifWarningBox}>
-              <Ionicons name="information-circle-outline" size={20} color="#38BDF8" />
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color="#38BDF8"
+              />
               <Text style={styles.notifWarningText}>
-                Push obavijesti su trenutno samo vizualni prikaz za razvoj. Pune obavijesti dolaze u produkcijskoj verziji aplikacije!
+                Push obavijesti su trenutno samo vizualni prikaz za razvoj. Pune
+                obavijesti dolaze u produkcijskoj verziji aplikacije!
               </Text>
             </View>
           </View>
@@ -370,7 +576,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, marginBottom: 30 },
   headerTitle: { fontSize: 24, fontWeight: "800", color: "#F8FAFC" },
   content: { paddingHorizontal: 20 },
-  
+
   avatarContainer: { alignItems: "center", marginBottom: 40 },
   avatarWrapper: {
     position: "relative",
@@ -406,9 +612,14 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#0F172A",
   },
-  displayName: { fontSize: 20, fontWeight: "700", color: "#F8FAFC", marginBottom: 4 },
+  displayName: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#F8FAFC",
+    marginBottom: 4,
+  },
   email: { fontSize: 14, color: "#94A3B8" },
-  
+
   section: {
     backgroundColor: "#1E293B",
     borderRadius: 16,
@@ -444,8 +655,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#F8FAFC",
   },
-  
-  // Modal styles
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -488,7 +698,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   choiceActive: { borderColor: "#F97316", backgroundColor: "#F9731615" },
-  choiceText: { color: "#94A3B8", fontSize: 12, fontWeight: "600", textAlign: "center" },
+  choiceText: {
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   choiceTextActive: { color: "#F97316" },
   saveBtn: {
     backgroundColor: "#F97316",
@@ -498,7 +713,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   saveBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
-  
+
   macrosBox: {
     marginTop: 24,
     backgroundColor: "#0F172A",
@@ -507,15 +722,51 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F9731630",
   },
-  macrosTitle: { fontSize: 16, fontWeight: "600", color: "#F8FAFC", marginBottom: 16, textAlign: "center" },
-  macroRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 12 },
+  macrosTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#F8FAFC",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  macroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
   macroValue: { fontSize: 22, fontWeight: "800", color: "#E2E8F0" },
-  macrosNote: { fontSize: 11, color: "#64748B", textAlign: "center", marginTop: 8 },
-  
-  // Settings toggle
-  toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, paddingRight: 10 },
-  toggleTitle: { fontSize: 16, fontWeight: "600", color: "#F8FAFC", marginBottom: 4 },
+  macrosNote: {
+    fontSize: 11,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  toggleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    paddingRight: 10,
+  },
+  toggleTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#F8FAFC",
+    marginBottom: 4,
+  },
   toggleSub: { fontSize: 12, color: "#94A3B8", maxWidth: 220, lineHeight: 16 },
-  notifWarningBox: { flexDirection: "row", backgroundColor: "#38BDF815", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#38BDF840", gap: 10, marginTop: 10 },
+  notifWarningBox: {
+    flexDirection: "row",
+    backgroundColor: "#38BDF815",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#38BDF840",
+    gap: 10,
+    marginTop: 10,
+  },
   notifWarningText: { flex: 1, fontSize: 12, color: "#38BDF8", lineHeight: 18 },
 });
